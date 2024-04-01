@@ -1,0 +1,79 @@
+/@version=4
+study(title="UT Bot Alerts with Coral Trend Indicator", overlay=true)
+
+// UT Bot Alerts Indicator (from the previous script)
+// Inputs
+a = input(1,     title = "Key Value. 'This changes the sensitivity'")
+c = input(10,    title = "ATR Period")
+h = input(false, title = "Signals from Heikin Ashi Candles")
+
+xATR  = atr(c)
+nLoss = a * xATR
+
+src = h ? security(heikinashi(syminfo.tickerid), timeframe.period, close, lookahead = false) : close
+
+xATRTrailingStop = 0.0
+xATRTrailingStop := iff(src > nz(xATRTrailingStop[1], 0) and src[1] > nz(xATRTrailingStop[1], 0), max(nz(xATRTrailingStop[1]), src - nLoss),
+   iff(src < nz(xATRTrailingStop[1], 0) and src[1] < nz(xATRTrailingStop[1], 0), min(nz(xATRTrailingStop[1]), src + nLoss), 
+   iff(src > nz(xATRTrailingStop[1], 0), src - nLoss, src + nLoss)))
+ 
+pos = 0   
+pos :=	iff(src[1] < nz(xATRTrailingStop[1], 0) and src > nz(xATRTrailingStop[1], 0), 1,
+   iff(src[1] > nz(xATRTrailingStop[1], 0) and src < nz(xATRTrailingStop[1], 0), -1, nz(pos[1], 0))) 
+   
+xcolor = pos == -1 ? color.red: pos == 1 ? color.green : color.blue 
+
+ema   = ema(src,1)
+above = crossover(ema, xATRTrailingStop)
+below = crossover(xATRTrailingStop, ema)
+
+buy  = src > xATRTrailingStop and above 
+sell = src < xATRTrailingStop and below
+
+barbuy  = src > xATRTrailingStop 
+barsell = src < xATRTrailingStop 
+
+plotshape(buy,  title = "Buy",  text = 'Buy',  style = shape.labelup,   location = location.belowbar, color= color.green, textcolor = color.white, transp = 0, size = size.tiny)
+plotshape(sell, title = "Sell", text = 'Sell', style = shape.labeldown, location = location.abovebar, color= color.red,   textcolor = color.white, transp = 0, size = size.tiny)
+
+barcolor(barbuy  ? color.green : na)
+barcolor(barsell ? color.red   : na)
+
+alertcondition(buy,  "UT Long",  "UT Long")
+alertcondition(sell, "UT Short", "UT Short")
+
+// Coral Trend Indicator
+src_cti = close
+sm_cti = input(21, title="Smoothing Period")
+cd_cti = input(0.4, title="Constant D")
+ebc_cti = input(false, title="Color Bars")
+ribm_cti = input(false, title="Ribbon Mode")
+
+var float i1_cti = na
+var float i2_cti = na
+var float i3_cti = na
+var float i4_cti = na
+var float i5_cti = na
+var float i6_cti = na
+
+di_cti = (sm_cti - 1.0) / 2.0 + 1.0
+c1_cti = 2 / (di_cti + 1.0)
+c2_cti = 1 - c1_cti
+c3_cti = 3.0 * (cd_cti * cd_cti + cd_cti * cd_cti * cd_cti)
+c4_cti = -3.0 * (2.0 * cd_cti * cd_cti + cd_cti + cd_cti * cd_cti * cd_cti)
+c5_cti = 3.0 * cd_cti + 1.0 + cd_cti * cd_cti * cd_cti + 3.0 * cd_cti * cd_cti
+i1_cti := c1_cti * src_cti + c2_cti * nz(i1_cti[1])
+i2_cti := c1_cti * i1_cti + c2_cti * nz(i2_cti[1])
+i3_cti := c1_cti * i2_cti + c2_cti * nz(i3_cti[1])
+i4_cti := c1_cti * i3_cti + c2_cti * nz(i4_cti[1])
+i5_cti := c1_cti * i4_cti + c2_cti * nz(i5_cti[1])
+i6_cti := c1_cti * i5_cti + c2_cti * nz(i6_cti[1])
+
+bfr_cti = -cd_cti * cd_cti * cd_cti * i6_cti + c3_cti * i5_cti + c4_cti * i4_cti + c5_cti * i3_cti
+
+bfrC_cti = bfr_cti > nz(bfr_cti[1]) ? color.green : bfr_cti < nz(bfr_cti[1])  ? color.red : color.blue
+tc_cti = ebc_cti ? color.gray : bfrC_cti
+
+plot(ribm_cti ? na : bfr_cti, title="Coral Trend Indicator", linewidth=3, style=plot.style_circles, color=tc_cti)
+bgcolor(ribm_cti ? bfrC_cti : na, transp=50)
+barcolor(ebc_cti ? bfrC_cti : na)
